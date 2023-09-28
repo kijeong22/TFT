@@ -313,16 +313,54 @@ out.shape
 
 #         return c_s, c_c, c_h, c_e
 
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, dropout):
+        super(ScaledDotProductAttention, self).__init__()
+
+        if dropout is not None:
+            self.dropout = nn.Dropout(p=dropout)
+        else:
+            self.dropout = dropout
+
+        self.softmax = nn.Softmax()
+
+    def forward(self, query, key, value, mask=None):
+
+        attention = torch.bmm(query, key.permute(0,2,1)) # (batch,squence,d_model) x (batch,d_model,squence)
+        # bmm : batch matrix multiplication
+        scaling = torch.as_tensor(query.shape[-1], dtype=attention.dtype).sqrt()
+        attention = attention/scaling
+
+        if mask is not None:
+            attention = attention.masked_fill(mask, -float('inf'))
+
+        attention = self.softmax(attention)
+
+        if self.dropout is not None:
+            attention = self.dropout(attention)
+
+        output = torch.bmm(attention, value) # (batch,squence,squence) x (batch,squence,d_model)
+
+        return output # (batch,squence,d_model)
+
+
+attn_mask = torch.ones(5, 5, dtype=torch.bool, device=device).triu(diagonal=1)
+attn_mask
+
 
 class InterpretableMultiheadAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads):
-        
+    def __init__(self, embed_dim, num_heads, dropout):
+        super(InterpretableMultiheadAttention, self).__init__()
+                
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.d_attn = self.embed_dim / self.num_heads
         self.d_v = self.d_attn
+        self.dropout = nn.Dropout(dropout)
 
-        self.softmax = nn.Softmax()
+        
+
+    def forward(self, query, key, value, mask=None):
 
 
-    def forward(query, key, value)
+
