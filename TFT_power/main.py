@@ -32,14 +32,15 @@ def argparse_custom():
 
     parser.add_argument("-s", type=int, default=[42], nargs=1, help="seed")
     parser.add_argument("-e", type=int, default=[100], nargs=1, help="epoch")
-    parser.add_argument("-b", type=int, default=[20], nargs=1, help="batch_size")
+    parser.add_argument("-b", type=int, default=[64], nargs=1, help="batch_size")
     parser.add_argument("-lr", type=float, default=[1e-2], nargs=1, help="learning_rate")
-    parser.add_argument("-es", type=int, default=[20], nargs=1, help="early_stopping")
-    parser.add_argument("-el", type=int, default=[24], nargs=1, help="encoder_len")
-    parser.add_argument("-dl", type=int, default=[5], nargs=1, help="decoder_len")
-    parser.add_argument("-dm", type=int, default=[40], nargs=1, help="d_model")
+    parser.add_argument("-es", type=int, default=[10], nargs=1, help="early_stopping")
+    parser.add_argument("-el", type=int, default=[168], nargs=1, help="encoder_len")
+    parser.add_argument("-dl", type=int, default=[24], nargs=1, help="decoder_len")
+    parser.add_argument("-dm", type=int, default=[8], nargs=1, help="d_model")
     parser.add_argument("-dr", type=float, default=[0.1], nargs=1, help="dropout")
-    parser.add_argument("-nh", type=int, default=[8], nargs=1, help="num_heads")
+    parser.add_argument("-nh", type=int, default=[2], nargs=1, help="num_heads")
+    parser.add_argument("-bmn", type=str, default=['best_tft_power'], nargs=1, help="best model name")
     parser.add_argument("-key", type=str, default=[None], nargs=1, help="wandb login key")
     parser.add_argument("-name", type=str, default=['default'], nargs=1, help="wandb project run name")
     
@@ -55,6 +56,7 @@ def argparse_custom():
     args.dm = args.dm[0]
     args.dr = args.dr[0]
     args.nh = args.nh[0]
+    args.bmn = args.bmn[0]
     args.key = args.key[0]
     args.name = args.name[0]
 
@@ -80,6 +82,7 @@ def main():
     d_model = args.dm
     dropout = args.dr
     num_heads = args.nh
+    best_model_name = args.bmn
     key = args.key
     name = args.name
 
@@ -123,7 +126,7 @@ def main():
     
     train_loader, valid_loader, test_loader = loader(train_temp_set, valid_temp_set, test_temp_set, batch_size=batch_size)
 
-    static_cate_num = [100]
+    static_cate_num = [101]
     static_conti_size = 2
     future_cate_num = [32,7,24,2] # day, dayofweek, hour, holiday
     category_num = [32,7,24,2] # day, dayofweek, hour, holiday
@@ -169,7 +172,7 @@ def main():
 
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
-                torch.save(model.state_dict(), 'best_tft.pth')
+                torch.save(model.state_dict(), f'best_model/{best_model_name}.pth')
                 early_stopping_count = 0
             else:
                 early_stopping_count += 1
@@ -202,15 +205,52 @@ def main():
                                   tau=tau,
                                   device=device).to(device)
     
-    model.load_state_dict(torch.load('best_tft_power.pth'))
+    model.load_state_dict(torch.load(f'best_model/{best_model_name}.pth'))
 
     test_loss, test_pred, test_target = eval(model, test_loader, criterion, device)
-    print(test_loss)
+    
+    pred = torch.cat(test_pred, dim=1) # (1,24,3)
+    pred_10 = pred[:,:,0] # (1,24)
+    pred_50 = pred[:,:,1] # (1,24)
+    pred_90 = pred[:,:,2] # (1,24)
+    true = torch.cat(test_target, dim=1) # (1,24)
+
+    pred_10_s = scaler_target.inverse_transform(pred_10.cpu().detach().numpy()).squeeze()
+    pred_50_s = scaler_target.inverse_transform(pred_50.cpu().detach().numpy()).squeeze()
+    pred_90_s = scaler_target.inverse_transform(pred_90.cpu().detach().numpy()).squeeze()
+    true_s = scaler_target.inverse_transform(true.cpu().detach().numpy()).squeeze()
+
+    x_values = pd.to_datetime(df['일시'][-168:], format='%Y%m%d %H').dt.date
+
+    for i in range(100):
+
+        pred_10 = pred_10_s[i*168 : i*168+168]
+        pred_50 = pred_50_s[i*168:i*168+168]
+        pred_90 = pred_90_s[i*168:i*168+168]
+        true = true_s[i*168:i*168+168]
+
+        plt.figure(figsize=(15, 5))
+        plt.plot(x_values, pred_50, label='Pred', color='blue', marker='o', markersize=3)
+        
+        for t in range(len(x_values)):
+            plt.vlines(x=x_values[t], ymin=pred_10[t], ymax=pred_90[t], color='blue', alpha=0.2)
+        
+        plt.plot(x_values, true, label='True', color='red', marker='o', markersize=3)
+
+        plt.legend()
+        plt.xlabel('Date')
+        plt.ylabel('Value')
+        plt.show()
+
+        if key is not None:
+
+            wandb.log({f"building {i}": plt})
     
     if key is not None:
 
         wandb.log({'Test Loss' : test_loss.item()})
         wandb.finish()
+
 
 if __name__ == "__main__":
     main()

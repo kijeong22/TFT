@@ -145,6 +145,13 @@ class TemporalFusionPowerDataset(Dataset):
         self.encoder_len = encoder_len
         self.decoder_len = decoder_len
         self.stride = stride
+        self.sequence_len = self.encoder_len + self.decoder_len # 192
+
+        self.num_buildings = len(data[static_categorical_variables].iloc[:,0].unique()) # 100
+        self.each_build_seq_data_len = len(self.data) // self.num_buildings - self.sequence_len + 1
+        # train : 1503
+        # valid : 145
+        # test : 145
 
         self.static_cate_data = data[static_categorical_variables]
         self.static_conti_data = data[static_continuous_variables]
@@ -155,24 +162,19 @@ class TemporalFusionPowerDataset(Dataset):
 
     def __len__(self):
 
-        data_length = ((len(self.data)//100 - self.encoder_len - self.decoder_len) // self.stride + 1) * 100
+        data_len = ((len(self.data) // self.num_buildings - self.sequence_len) // self.stride + 1) * self.num_buildings
 
-        return data_length
+        return data_len
 
     def __getitem__(self, idx):
+
+        new_idx = idx + (idx//self.each_build_seq_data_len) * (self.sequence_len-1)
+                
+        static_cate_data = torch.tensor(self.static_cate_data[new_idx:new_idx+1].to_numpy())
+        static_conti_data = torch.tensor(self.static_conti_data[new_idx:new_idx+1].to_numpy())
+        future_data = torch.tensor(self.future_data[new_idx+self.encoder_len:new_idx+self.sequence_len].to_numpy())
+        past_cate_data = torch.tensor(self.past_cate_data[new_idx:new_idx+self.encoder_len].to_numpy())
+        past_conti_data = torch.tensor(self.past_conti_data[new_idx:new_idx+self.encoder_len].to_numpy())
+        target = torch.tensor(self.target[new_idx+self.encoder_len:new_idx+self.sequence_len].to_numpy())
         
-        if (self.static_cate_data.iloc[:,0] != self.static_cate_data.iloc[0,0]).any():
-
-            idx = idx + self.encoder_len + self.decoder_len
-            static_cate_data = torch.tensor(self.static_cate_data[idx:idx+1].to_numpy())
-
-        else:
-            static_cate_data = torch.tensor(self.static_cate_data[idx:idx+1].to_numpy())
-        
-        static_conti_data = torch.tensor(self.static_conti_data[idx:idx+1].to_numpy())
-        future_data = torch.tensor(self.future_data[idx+self.encoder_len:idx+self.encoder_len+self.decoder_len].to_numpy())
-        past_cate_data = torch.tensor(self.past_cate_data[idx:idx+self.encoder_len].to_numpy())
-        past_conti_data = torch.tensor(self.past_conti_data[idx:idx+self.encoder_len].to_numpy())
-        target = torch.tensor(self.target[idx+self.encoder_len:idx+self.encoder_len+self.decoder_len].to_numpy())
-
         return static_cate_data, static_conti_data, future_data, past_cate_data, past_conti_data, target
