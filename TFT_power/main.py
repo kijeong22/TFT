@@ -34,7 +34,7 @@ def argparse_custom():
     parser.add_argument("-e", type=int, default=[100], nargs=1, help="epoch")
     parser.add_argument("-b", type=int, default=[64], nargs=1, help="batch_size")
     parser.add_argument("-lr", type=float, default=[1e-2], nargs=1, help="learning_rate")
-    parser.add_argument("-es", type=int, default=[10], nargs=1, help="early_stopping")
+    parser.add_argument("-es", type=int, default=[15], nargs=1, help="early_stopping")
     parser.add_argument("-el", type=int, default=[168], nargs=1, help="encoder_len")
     parser.add_argument("-dl", type=int, default=[24], nargs=1, help="decoder_len")
     parser.add_argument("-dm", type=int, default=[8], nargs=1, help="d_model")
@@ -209,42 +209,41 @@ def main():
 
     test_loss, test_pred, test_target = eval(model, test_loader, criterion, device)
     
-    pred = torch.cat(test_pred, dim=1) # (1,24,3)
-    pred_10 = pred[:,:,0] # (1,24)
-    pred_50 = pred[:,:,1] # (1,24)
-    pred_90 = pred[:,:,2] # (1,24)
-    true = torch.cat(test_target, dim=1) # (1,24)
+    pred = torch.cat(test_pred, dim=1) # (1,168,3)
+    pred_10 = pred[:,:,0] # (1,168)
+    pred_50 = pred[:,:,1] # (1,168)
+    pred_90 = pred[:,:,2] # (1,168)
+    true = torch.cat(test_target, dim=1) # (1,168)
 
     pred_10_s = scaler_target.inverse_transform(pred_10.cpu().detach().numpy()).squeeze()
     pred_50_s = scaler_target.inverse_transform(pred_50.cpu().detach().numpy()).squeeze()
     pred_90_s = scaler_target.inverse_transform(pred_90.cpu().detach().numpy()).squeeze()
     true_s = scaler_target.inverse_transform(true.cpu().detach().numpy()).squeeze()
 
-    x_values = pd.to_datetime(df['일시'][-168:], format='%Y%m%d %H').dt.date
-
+    x_values = pd.to_datetime(df['일시'][-168:], format='%Y%m%d %H')
     for i in range(100):
 
         pred_10 = pred_10_s[i*168 : i*168+168]
-        pred_50 = pred_50_s[i*168:i*168+168]
-        pred_90 = pred_90_s[i*168:i*168+168]
-        true = true_s[i*168:i*168+168]
+        pred_50 = pred_50_s[i*168 : i*168+168]
+        pred_90 = pred_90_s[i*168 : i*168+168]
+        true = true_s[i*168 : i*168+168]
 
-        plt.figure(figsize=(15, 5))
+        plt.figure(figsize=(15, 7))
         plt.plot(x_values, pred_50, label='Pred', color='blue', marker='o', markersize=3)
         
         for t in range(len(x_values)):
-            plt.vlines(x=x_values[t], ymin=pred_10[t], ymax=pred_90[t], color='blue', alpha=0.2)
+            plt.vlines(x=x_values.iloc[t], ymin=pred_10[t], ymax=pred_90[t], color='blue', alpha=0.2)
         
         plt.plot(x_values, true, label='True', color='red', marker='o', markersize=3)
 
-        plt.legend()
-        plt.xlabel('Date')
-        plt.ylabel('Value')
+        plt.legend(fontsize=15)
+        plt.xlabel('Date', fontsize=13)
+        plt.ylabel('Value', fontsize=13)
         plt.show()
 
         if key is not None:
 
-            wandb.log({f"building {i}": plt})
+            wandb.log({f"building {i+1}": wandb.Image(plt)})
     
     if key is not None:
 

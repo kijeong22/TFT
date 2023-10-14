@@ -9,7 +9,7 @@ def eval(model, data_loader, criterion, device):
     targets = []
 
     with torch.no_grad():
-        for idx, static_cate, static_conti, future, past_category, past_continuous, target in enumerate(data_loader):
+        for idx, (static_cate, static_conti, future, past_category, past_continuous, target) in enumerate(data_loader):
 
             static_cate = static_cate.to(device)
             static_conti = static_conti.to(device)
@@ -20,11 +20,21 @@ def eval(model, data_loader, criterion, device):
 
             pred, _ = model(static_cate, static_conti, future, past_category, past_continuous)
 
-            loss = criterion(target, pred[:,:,1])
+            loss = criterion(target, pred)
 
             total_loss.append(loss)
+
+            condition = static_cate.item()
+
+            if condition >= 25:
+
+                condition = condition % 24
+
+                if condition == 0:
+                    
+                    condition = 24
             
-            if idx % len(future[0,:,0]) == 0: # len(future[0,:,0]) == decoder_len
+            if idx % len(future[0,:,0]) == condition-1: # len(future[0,:,0]) == decoder_len
 
                 predictions.append(pred)
                 targets.append(target)
