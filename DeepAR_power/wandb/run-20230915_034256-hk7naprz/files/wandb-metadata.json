@@ -1,0 +1,56 @@
+{
+    "os": "Windows-10-10.0.19045-SP0",
+    "python": "3.10.0",
+    "heartbeatAt": "2023-09-14T18:42:57.705599",
+    "startedAt": "2023-09-14T18:42:56.896013",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "-e",
+        "500",
+        "-hn",
+        "50",
+        "-key",
+        "420ba3a37f4de92bf7fcf501ab5b24877d1d9cc1",
+        "-name",
+        "e500h50"
+    ],
+    "state": "running",
+    "program": "C:\\Users\\tmp\\Desktop\\mission\\mission2\\deepar_final\\main.py",
+    "codePathLocal": "main.py",
+    "codePath": "main.py",
+    "host": "DESKTOP-4IAFTU2",
+    "username": "tmp",
+    "executable": "C:\\Users\\tmp\\anaconda3\\envs\\torch\\python.exe",
+    "cpu_count": 6,
+    "cpu_count_logical": 6,
+    "cpu_freq": {
+        "current": 3000.0,
+        "min": 0.0,
+        "max": 3000.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3000.0,
+            "min": 0.0,
+            "max": 3000.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 237.79767227172852,
+            "used": 82.10455322265625
+        }
+    },
+    "gpu": "NVIDIA GeForce GTX 1050",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GTX 1050",
+            "memory_total": 2147483648
+        }
+    ],
+    "memory": {
+        "total": 15.915508270263672
+    }
+}
