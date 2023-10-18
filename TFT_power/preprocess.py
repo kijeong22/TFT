@@ -84,13 +84,14 @@ def preprocess(train_set):
     train_set = pd.concat([train_set.iloc[:,0:5], train_set.iloc[:,6:], train_set.iloc[:,5:6]], axis=1)
 
     train_set = train_set[[
-        'building_num', 'total_area', 'cooling_area', # static variable
+        'building_num', #'total_area', 'cooling_area', # static variable
         'day', 'weekday', 'hour', 'holiday', # future variable
         'temperature', 'precipitation', 'windspeed', 'humidity', 'DI', 'CDH', # observed variable
         'power_consumption' # target
         ]]
 
     return train_set, train_set.columns
+
 
 
 def split_data(data):
@@ -117,6 +118,40 @@ def split_data(data):
     return train_set, valid_set, test_set
 
 
+def scaler(train_set, valid_set, test_set):
+
+    scaler_list = []
+    train_set_s = pd.DataFrame()
+    valid_set_s = pd.DataFrame()
+    test_set_s = pd.DataFrame()
+    scaling_features = ['temperature', 'precipitation', 'windspeed', 'humidity', 'DI', 'CDH']
+    scaling_target = ['power_consumption']
+    for i in range(1, len(train_set['building_num'].unique())+1):
+
+        train_set_each_building = train_set[train_set['building_num']==i]
+        valid_set_each_building = valid_set[valid_set['building_num']==i]
+        test_set_each_building = test_set[test_set['building_num']==i]
+
+        train_features_mean = train_set_each_building[scaling_features].mean()/10
+        train_target_mean = train_set_each_building[scaling_target].mean()/10
+
+        train_set_each_building[scaling_features] = train_set_each_building[scaling_features] / train_features_mean
+        valid_set_each_building[scaling_features] = valid_set_each_building[scaling_features] / train_features_mean 
+        test_set_each_building[scaling_features] = test_set_each_building[scaling_features] / train_features_mean
+
+        train_set_each_building[scaling_target] = train_set_each_building[scaling_target] / train_target_mean
+        valid_set_each_building[scaling_target] = valid_set_each_building[scaling_target] / train_target_mean
+        test_set_each_building[scaling_target] = test_set_each_building[scaling_target] / train_target_mean
+
+        train_set_s = pd.concat([train_set_s, train_set_each_building])
+        valid_set_s = pd.concat([valid_set_s, valid_set_each_building])
+        test_set_s = pd.concat([test_set_s, test_set_each_building])
+
+        scaler_list.append(train_target_mean.item())
+
+    return train_set_s, valid_set_s, test_set_s, scaler_list
+
+
 def loader(train_set, valid_set, test_set, batch_size):
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -131,11 +166,11 @@ class TemporalFusionPowerDataset(Dataset):
                  data,
                  encoder_len:int,
                  decoder_len:int,
-                 static_categorical_variables:list[str],
-                 static_continuous_variables:list[str],
-                 future_variables:list[str],
-                 past_categorical_variables:list[str],
-                 past_continuous_variables:list[str],
+                 static_categorical_variables:list,
+                 #static_continuous_variables:list,
+                 future_variables:list,
+                 past_categorical_variables:list,
+                 past_continuous_variables:list,
                  target:str,
                  stride=1
                  ):
@@ -154,7 +189,7 @@ class TemporalFusionPowerDataset(Dataset):
         # test : 145
 
         self.static_cate_data = data[static_categorical_variables]
-        self.static_conti_data = data[static_continuous_variables]
+        #self.static_conti_data = data[static_continuous_variables]
         self.future_data = data[future_variables]
         self.past_cate_data = data[past_categorical_variables]
         self.past_conti_data = data[past_continuous_variables]
@@ -171,10 +206,10 @@ class TemporalFusionPowerDataset(Dataset):
         new_idx = idx + (idx//self.each_build_seq_data_len) * (self.sequence_len-1)
                 
         static_cate_data = torch.tensor(self.static_cate_data[new_idx:new_idx+1].to_numpy())
-        static_conti_data = torch.tensor(self.static_conti_data[new_idx:new_idx+1].to_numpy())
+        #static_conti_data = torch.tensor(self.static_conti_data[new_idx:new_idx+1].to_numpy())
         future_data = torch.tensor(self.future_data[new_idx+self.encoder_len:new_idx+self.sequence_len].to_numpy())
         past_cate_data = torch.tensor(self.past_cate_data[new_idx:new_idx+self.encoder_len].to_numpy())
         past_conti_data = torch.tensor(self.past_conti_data[new_idx:new_idx+self.encoder_len].to_numpy())
         target = torch.tensor(self.target[new_idx+self.encoder_len:new_idx+self.sequence_len].to_numpy())
         
-        return static_cate_data, static_conti_data, future_data, past_cate_data, past_conti_data, target
+        return static_cate_data, future_data, past_cate_data, past_conti_data, target

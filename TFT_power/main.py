@@ -16,7 +16,7 @@ from preprocess import *
 from train import train
 from eval import eval
 from valid import valid
-from metric import QuantileLoss
+from metric import QuantileLoss, smape
 
 def seed_everything(seed):
     random.seed(seed)
@@ -89,7 +89,7 @@ def main():
     if key is not None:
         
         wandb.login(key=key)
-        wandb.init(project='TFT_power', name=name)
+        wandb.init(project='TFT_power_each_scaling', name=name)
 
     seed_everything(seed)
 
@@ -97,52 +97,41 @@ def main():
     train_set, columns = preprocess(df)
     train_set, valid_set, test_set = split_data(train_set)
 
-    scaler_feature = MinMaxScaler()
-    scaler_target = MinMaxScaler()
-
-    scaling_features = ['total_area', 'cooling_area', 'temperature', 'precipitation', 'windspeed', 'humidity', 'DI', 'CDH']
-    scaling_target = ['power_consumption']
-
-    train_set[scaling_features] = scaler_feature.fit_transform(train_set[scaling_features])
-    train_set[scaling_target] = scaler_target.fit_transform(train_set[scaling_target])
-    valid_set[scaling_features] = scaler_feature.transform(valid_set[scaling_features])
-    valid_set[scaling_target] = scaler_target.transform(valid_set[scaling_target])
-    test_set[scaling_features] = scaler_feature.transform(test_set[scaling_features])
-    test_set[scaling_target] = scaler_target.transform(test_set[scaling_target])
+    train_set, valid_set, test_set, scaler_list = scaler(train_set, valid_set, test_set)
 
     static_categorical_variables = list(train_set.columns[:1])
-    static_continuous_variables = list(train_set.columns[1:3])
-    future_variables = list(train_set.columns[3:7])
-    past_categorical_variables = list(train_set.columns[3:7])
-    past_continuous_variables = list(train_set.columns[7:])
+    #static_continuous_variables = list(train_set.columns[1:3])
+    future_variables = list(train_set.columns[1:5])
+    past_categorical_variables = list(train_set.columns[1:5])
+    past_continuous_variables = list(train_set.columns[5:])
     target = train_set.columns[-1]
 
-    train_temp_set = TemporalFusionPowerDataset(train_set, encoder_len, decoder_len, static_categorical_variables, static_continuous_variables, 
-                                            future_variables, past_categorical_variables, past_continuous_variables, target)
-    valid_temp_set = TemporalFusionPowerDataset(valid_set, encoder_len, decoder_len, static_categorical_variables, static_continuous_variables, 
+    train_temp_set = TemporalFusionPowerDataset(train_set, encoder_len, decoder_len, static_categorical_variables, 
                                                 future_variables, past_categorical_variables, past_continuous_variables, target)
-    test_temp_set = TemporalFusionPowerDataset(valid_set, encoder_len, decoder_len, static_categorical_variables, static_continuous_variables, 
+    valid_temp_set = TemporalFusionPowerDataset(valid_set, encoder_len, decoder_len, static_categorical_variables, 
                                                 future_variables, past_categorical_variables, past_continuous_variables, target)
-    
+    test_temp_set = TemporalFusionPowerDataset(valid_set, encoder_len, decoder_len, static_categorical_variables,
+                                                future_variables, past_categorical_variables, past_continuous_variables, target)
+
     train_loader, valid_loader, test_loader = loader(train_temp_set, valid_temp_set, test_temp_set, batch_size=batch_size)
 
     static_cate_num = [101]
-    static_conti_size = 2
+    #static_conti_size = 2
     future_cate_num = [32,7,24,2] # day, dayofweek, hour, holiday
     category_num = [32,7,24,2] # day, dayofweek, hour, holiday
     continuous_input_size = 7
-    static_num_input = 3
+    static_num_input = 1
     encoder_num_input = 11
     decoder_num_input = 4
     tau = decoder_len
     quantiles = [0.1,0.5,0.9]
 
-    model = TemporalFusionTransformer(encoder_len=encoder_len, 
-                                  decoder_len=decoder_len, 
+    model = TemporalFusionTransformer(encoder_len=encoder_len,
+                                  decoder_len=decoder_len,
                                   d_model=d_model, 
                                   dropout=dropout,
                                   static_cate_num=static_cate_num,
-                                  static_conti_size=static_conti_size,
+                                  #static_conti_size=static_conti_size,
                                   future_cate_num=future_cate_num, 
                                   category_num=category_num,
                                   continuous_input_size=continuous_input_size, 
@@ -188,12 +177,12 @@ def main():
                     "Train Loss": train_loss.item(),
                     "Valid Loss": valid_loss.item()})
 
-    model = TemporalFusionTransformer(encoder_len=encoder_len, 
-                                  decoder_len=decoder_len, 
+    model = TemporalFusionTransformer(encoder_len=encoder_len,
+                                  decoder_len=decoder_len,
                                   d_model=d_model, 
                                   dropout=dropout,
                                   static_cate_num=static_cate_num,
-                                  static_conti_size=static_conti_size,
+                                  #static_conti_size=static_conti_size,
                                   future_cate_num=future_cate_num, 
                                   category_num=category_num,
                                   continuous_input_size=continuous_input_size, 
@@ -209,24 +198,28 @@ def main():
 
     test_loss, test_pred, test_target = eval(model, test_loader, criterion, device)
     
-    pred = torch.cat(test_pred, dim=1) # (1,168,3)
-    pred_10 = pred[:,:,0] # (1,168)
-    pred_50 = pred[:,:,1] # (1,168)
-    pred_90 = pred[:,:,2] # (1,168)
-    true = torch.cat(test_target, dim=1) # (1,168)
+    pred = torch.cat(test_pred, dim=1).squeeze().unsqueeze(-1)
+    target = torch.cat(test_target, dim=1).squeeze().unsqueeze(-1)
 
-    pred_10_s = scaler_target.inverse_transform(pred_10.cpu().detach().numpy()).squeeze()
-    pred_50_s = scaler_target.inverse_transform(pred_50.cpu().detach().numpy()).squeeze()
-    pred_90_s = scaler_target.inverse_transform(pred_90.cpu().detach().numpy()).squeeze()
-    true_s = scaler_target.inverse_transform(true.cpu().detach().numpy()).squeeze()
+    smape_score = smape(target, pred[:,1])
+
+    result = []
+    for i in tqdm(range(100)):
+
+        pred_10 = pred[168*i:168*i+168,0].cpu().detach().numpy() * scaler_list[i]
+        pred_50 = pred[168*i:168*i+168,1].cpu().detach().numpy() * scaler_list[i]
+        pred_90 = pred[168*i:168*i+168,2].cpu().detach().numpy() * scaler_list[i]
+        true_ = target[168*i:168*i+168].cpu().detach().numpy() * scaler_list[i]
+
+        result.append([pred_10, pred_50, pred_90, true_])
 
     x_values = pd.to_datetime(df['일시'][-168:], format='%Y%m%d %H')
     for i in range(100):
 
-        pred_10 = pred_10_s[i*168 : i*168+168]
-        pred_50 = pred_50_s[i*168 : i*168+168]
-        pred_90 = pred_90_s[i*168 : i*168+168]
-        true = true_s[i*168 : i*168+168]
+        pred_10 = result[i][0]
+        pred_50 = result[i][1]
+        pred_90 = result[i][2]
+        true = result[i][3]
 
         plt.figure(figsize=(15, 7))
         plt.plot(x_values, pred_50, label='Pred', color='blue', marker='o', markersize=3)
@@ -247,7 +240,7 @@ def main():
     
     if key is not None:
 
-        wandb.log({'Test Loss' : test_loss.item()})
+        wandb.log({'Test Loss' : test_loss.item(), 'SMAPE' : smape_score.item()})
         wandb.finish()
 
 

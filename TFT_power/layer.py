@@ -111,7 +111,7 @@ class VariableSelection(nn.Module):
 
         self.grn_v = GRN(self.input_size*self.num_inputs, self.d_model, self.num_inputs, self.dropout)
         self.grn_ksi = nn.ModuleList(np.repeat(GRN(self.input_size, self.d_model, self.output_size, self.dropout), self.num_inputs).tolist())
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, ksi, c=None):
 

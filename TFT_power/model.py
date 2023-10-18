@@ -18,7 +18,7 @@ class TemporalFusionTransformer(nn.Module):
             d_model:int, 
             dropout:float,
             static_cate_num:list,
-            static_conti_size:int,
+            #static_conti_size:int,
             future_cate_num:list,
             category_num:list,
             continuous_input_size:int,
@@ -40,7 +40,7 @@ class TemporalFusionTransformer(nn.Module):
 
         # embedding
         self.static_cate_emb = CategoricalEmbedding(d_model, static_cate_num)
-        self.static_conti_emb = ContinuousEmbedding(d_model, static_conti_size)
+        #self.static_conti_emb = ContinuousEmbedding(d_model, static_conti_size)
         self.future_emb = CategoricalEmbedding(d_model, future_cate_num)
         self.category_emb = CategoricalEmbedding(d_model, category_num)
         self.continuous_emb = ContinuousEmbedding(d_model, continuous_input_size)
@@ -81,7 +81,7 @@ class TemporalFusionTransformer(nn.Module):
 
     def forward(self, 
                 static_cate_input,
-                static_conti_input,
+                #static_conti_input,
                 future_input, 
                 category_input, 
                 continuous_input
@@ -89,11 +89,11 @@ class TemporalFusionTransformer(nn.Module):
         
         # embedding
         # shape : (batch_size, sequence_length, num_of_features, embedding_dim)        
-        static_cate_input = self.static_cate_emb(static_cate_input.to(torch.int)) # (batch,1,static_cate_num,d_model)
-        static_conti_input = self.static_conti_emb(static_conti_input.to(torch.float)) # (batch,1,static_conti_num,d_model)
-        static_input = torch.cat([static_cate_input, static_conti_input], dim=-2)
-        future_input = self.future_emb(future_input.to(torch.int)) # (batch,decoder_len,future_num,d_model)
-        category_input = self.category_emb(category_input.to(torch.int)) # (batch,encoder_len,cate_input_num,d_model)
+        static_cate_input = self.static_cate_emb(static_cate_input.to(torch.long)) # (batch,1,static_cate_num,d_model)
+        #static_conti_input = self.static_conti_emb(static_conti_input.to(torch.float)) # (batch,1,static_conti_num,d_model)
+        static_input = static_cate_input # torch.cat([static_cate_input, static_conti_input], dim=-2)
+        future_input = self.future_emb(future_input.to(torch.long)) # (batch,decoder_len,future_num,d_model)
+        category_input = self.category_emb(category_input.to(torch.long)) # (batch,encoder_len,cate_input_num,d_model)
         continuous_input = self.continuous_emb(continuous_input.to(torch.float)) # (batch,encoder_len,conti_input_num,d_model)
 
         # static covariates encoders

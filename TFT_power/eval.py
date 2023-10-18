@@ -9,16 +9,16 @@ def eval(model, data_loader, criterion, device):
     targets = []
 
     with torch.no_grad():
-        for idx, (static_cate, static_conti, future, past_category, past_continuous, target) in enumerate(data_loader):
+        for idx, (static_cate, future, past_category, past_continuous, target) in enumerate(data_loader):
 
             static_cate = static_cate.to(device)
-            static_conti = static_conti.to(device)
+            #static_conti = static_conti.to(device)
             future = future.to(device)
             past_category = past_category.to(device)
             past_continuous = past_continuous.to(device)
             target = target.to(device)
 
-            pred, _ = model(static_cate, static_conti, future, past_category, past_continuous)
+            pred, _ = model(static_cate, future, past_category, past_continuous)
 
             loss = criterion(target, pred)
 
